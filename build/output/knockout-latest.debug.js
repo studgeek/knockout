@@ -2,7 +2,7 @@
 // (c) Steven Sanderson - http://knockoutjs.com/
 // License: MIT (http://www.opensource.org/licenses/mit-license.php)
 
-(function(window,undefined){ 
+(function(window,undefined){
 var ko = window["ko"] = {};
 // Google Closure Compiler helpers (used only to make the minified file smaller)
 ko.exportSymbol = function(publicPath, object) {
@@ -1582,7 +1582,7 @@ ko.exportSymbol('ko.jsonExpressionRewriting.insertPropertyAccessorsIntoJson', ko
 
         'getBindings': function(node, bindingContext) {
             var bindingsString = this['getBindingsString'](node, bindingContext);
-            return bindingsString ? this['parseBindingsString'](bindingsString, bindingContext) : null;
+            return bindingsString ? this['parseBindingsString'](bindingsString, bindingContext, node) : null;
         },
 
         // The following function is only used internally by this default provider.
@@ -1597,11 +1597,12 @@ ko.exportSymbol('ko.jsonExpressionRewriting.insertPropertyAccessorsIntoJson', ko
 
         // The following function is only used internally by this default provider.
         // It's not part of the interface definition for a general binding provider.
-        'parseBindingsString': function(bindingsString, bindingContext) {
+        'parseBindingsString': function(bindingsString, bindingContext, node) {
             try {
                 var viewModel = bindingContext['$data'];
                 var rewrittenBindings = " { " + ko.jsonExpressionRewriting.insertPropertyAccessorsIntoJson(bindingsString) + " } ";
-                return ko.utils.evalWithinScope(rewrittenBindings, viewModel === null ? window : viewModel, bindingContext);
+				return ko.utils.evalWithinScope(rewrittenBindings, viewModel === null ? window : viewModel,
+					bindingContext, { "$element" : node });
             } catch (ex) {
                 throw new Error("Unable to parse bindings.\nMessage: " + ex + ";\nBindings value: " + bindingsString);
             }           
@@ -3051,4 +3052,4 @@ ko.exportSymbol('ko.nativeTemplateEngine', ko.nativeTemplateEngine);(function() 
         ko.setTemplateEngine(jqueryTmplTemplateEngineInstance);
     
     ko.exportSymbol('ko.jqueryTmplTemplateEngine', ko.jqueryTmplTemplateEngine);
-})();})(window);                  
+})();})(window);
