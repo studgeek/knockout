@@ -172,9 +172,20 @@ ko.utils = new (function () {
             return false;
         },
 
-        domNodeIsAttachedToDocument: function (node) {
-            return ko.utils.domNodeIsContainedBy(node, document);
-        },
+		domNodeIsAttachedToDocument: function(node) {
+			var curr = node;
+			while (true) {
+				curr = curr.parentNode;
+				// If parent is null or DOCUMENT_FRAGMENT_NODE return false
+				if (null == curr || 11 == curr.nodeType ) {
+					return false;
+				}
+				// If parent is DOCUMENT_NODE return true
+				if (9 == curr.nodeType) { // DOCUMENT_NODE
+					return true;
+				}
+			}
+		},
 
         registerEventHandler: function (element, eventType, handler) {
             if (typeof jQuery != "undefined") {
@@ -794,7 +805,10 @@ ko.observable = function (initialValue) {
     ko.utils.extend(observable, ko.observable['fn']);    
     
     ko.exportProperty(observable, "valueHasMutated", observable.valueHasMutated);
-    
+
+	observable.isKnockoutObservable = true;
+    observable.isKnockoutWritableObservable = true;
+
     return observable;
 }
 
@@ -808,19 +822,10 @@ ko.observable['fn'] = {
 };
 
 ko.isObservable = function (instance) {
-    if ((instance === null) || (instance === undefined) || (instance.__ko_proto__ === undefined)) return false;
-    if (instance.__ko_proto__ === ko.observable) return true;
-    return ko.isObservable(instance.__ko_proto__); // Walk the prototype chain
+	return (typeof instance == "function") && instance.isKnockoutObservable;
 }
 ko.isWriteableObservable = function (instance) {
-    // Observable
-    if ((typeof instance == "function") && instance.__ko_proto__ === ko.observable)
-        return true;
-    // Writeable dependent observable
-    if ((typeof instance == "function") && (instance.__ko_proto__ === ko.dependentObservable) && (instance.hasWriteFunction))
-        return true;
-    // Anything else
-    return false;
+    return (typeof instance == "function") && instance.isKnockoutWritableObservable;
 }
 
 
@@ -851,28 +856,31 @@ ko.observableArray = function (initialValues) {
 ko.observableArray['fn'] = {
     remove: function (valueOrPredicate) {
         var underlyingArray = this();
-        var remainingValues = [];
         var removedValues = [];
-        var predicate = typeof valueOrPredicate == "function" ? valueOrPredicate : function (value) { return value === valueOrPredicate; };
-        for (var i = 0, j = underlyingArray.length; i < j; i++) {
-            var value = underlyingArray[i];
-            if (!predicate(value))
-                remainingValues.push(value);
-            else
-                removedValues.push(value);
-        }
-        this(remainingValues);
+		var predicate = typeof valueOrPredicate == "function" ? valueOrPredicate : function (value) { return value === valueOrPredicate; };
+		for (var i = 0; i < underlyingArray.length; i++) {
+		   var value = underlyingArray[i];
+		   if (predicate(value)) {
+			 removedValues.push(value);
+			 underlyingArray.splice(i, 1);
+			 i--;
+		   }
+		}
+		if (removedValues.length) {
+			this.valueHasMutated();
+		}
         return removedValues;
     },
 
     removeAll: function (arrayOfValues) {
         // If you passed zero args, we remove everything
         if (arrayOfValues === undefined) {
-            var allValues = this();
-            this([]);
+			var underlyingArray = this();
+			var allValues = underlyingArray.slice(0);
+			underlyingArray.splice(0, underlyingArray.length);
+			this.valueHasMutated();
             return allValues;
         }
-        
         // If you passed an arg, we interpret it as an array of entries to remove
         if (!arrayOfValues)
             return [];
@@ -1037,7 +1045,8 @@ ko.dependentObservable = function (evaluatorFunctionOrOptions, evaluatorFunction
         }
     }    
     dependentObservable.getDependenciesCount = function () { return _subscriptionsToDependencies.length; }
-    dependentObservable.hasWriteFunction = typeof options["write"] === "function";
+	dependentObservable.isKnockoutObservable = true;
+    dependentObservable.isKnockoutWritableObservable = typeof options["write"] === "function";
     dependentObservable.dispose = function () {
         if (disposeWhenNodeIsRemoved)
             ko.utils.domNodeDisposal.removeDisposeCallback(disposeWhenNodeIsRemoved, disposeWhenNodeIsRemovedCallback);
@@ -1064,6 +1073,7 @@ ko.dependentObservable.__ko_proto__ = ko.observable;
 
 ko.exportSymbol('ko.dependentObservable', ko.dependentObservable);
 ko.exportSymbol('ko.computed', ko.dependentObservable); // Make "ko.computed" an alias for "ko.dependentObservable"
+
 (function() {    
     var maxNestedObservableDepth = 10; // Escape the (unlikely) pathalogical case where an observable's current value is itself (or similar reference cycle)
     
